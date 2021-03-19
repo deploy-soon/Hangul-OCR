@@ -25,7 +25,10 @@ def text_to_image(char, width, height,
 
 class HangulDataset(Dataset):
 
-    def __init__(self, image_size=64, font_size=40):
+    def __init__(self, transform=None,
+                 image_size=64, font_size=40):
+        self.transform = transform
+
         chars = []
         for i in range(JAMO1):
             for j in range(JAMO2):
@@ -55,6 +58,8 @@ class HangulDataset(Dataset):
         label[i] = 1
         label[JAMO1 + j] = 1
         label[JAMO1 + JAMO2 + k] = 1
+        if self.transform is not None:
+            img = self.transform(img)
         return img, label
 
 
