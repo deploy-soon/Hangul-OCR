@@ -6,7 +6,7 @@ from torch import optim
 from torch.nn import functional as F
 from torchvision import transforms
 
-from data import HangulDataset, JAMO1, JAMO2, JAMO3
+from data import HangulDataset, JAMO1, JAMO2, JAMO3, label_to_text
 from models import resnet50
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -75,12 +75,28 @@ class Train:
         print("validate acc:", '%.3f' % (score / self.vali_num))
         return vali_loss / self.vali_num
 
+    def test(self):
+        self.model.eval()
+        for xs, ys in self.vali_loader:
+            xs = xs.to(device)
+            preds = self.model(xs)
+
+            ys = ys.detach().cpu().numpy()
+            preds = preds.detach().cpu().numpy()
+
+            for y, pred in zip(ys, preds):
+                char_y = label_to_text(y)
+                char_p = label_to_text(pred)
+                if char_y != char_p:
+                    print(f"true: {char_y}, pred:{char_p}")
+            break
+
     def run(self):
         for epoch in range(self.args.epochs):
             train_loss = self.train()
             vali_loss = self.validate()
             print("epochs: {}, train_loss: {:.4f}, vali_loss: {:.4f}".format(epoch+1, train_loss, vali_loss))
-
+        self.test()
 
 def main():
 
@@ -89,7 +105,7 @@ def main():
     # model
 
     # train
-    parser.add_argument('--epochs', type=int, default=150)
+    parser.add_argument('--epochs', type=int, default=85)
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--train_ratio', type=float, default=0.70)
     #optimizer

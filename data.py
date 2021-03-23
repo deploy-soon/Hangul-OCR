@@ -9,6 +9,15 @@ JAMO2 = 21
 JAMO3 = 28
 
 
+def label_to_text(label):
+    jamo1 = label[:JAMO1]
+    jamo2 = label[JAMO1:JAMO1+JAMO2]
+    jamo3 = label[JAMO1+JAMO2:]
+    i = np.argmax(jamo1)
+    j = np.argmax(jamo2)
+    k = np.argmax(jamo3)
+    char = chr(i * 588 + j * 28 + k + JAMO_OFFSET)
+    return char
 
 def text_to_image(char, width, height,
                   font,
