@@ -51,7 +51,7 @@ def text_to_image(char, width, height,
 class HangulDataset(Dataset):
 
     def __init__(self, transform=None,
-                 image_size=64, font_size=40):
+                 image_size=72, font_size=45):
         self.transform = transform
 
         chars = []
@@ -78,7 +78,7 @@ class HangulDataset(Dataset):
                             height=self.image_size,
                             font=random.choice(self.fonts),
                             color=random.randint(200, 255),
-                            stroke_width=random.randint(1, 2))
+                            stroke_width=random.randint(1, 3))
         label = label_to_one_hot(i, j, k)
         if self.transform is not None:
             img = self.transform(img)
@@ -93,7 +93,7 @@ class TestDataset(Dataset):
         file_list = glob.glob(data_path)
 
         images = []
-        for path in file_list:
+        for path in file_list[:500]:
             _path = os.path.normpath(path).split(os.path.sep)
             if len(_path) > 3 and _path[-3].startswith("Hangul"):
                 char = _path[-2]

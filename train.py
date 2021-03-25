@@ -19,7 +19,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def accuracy(preds, trues):
     assert preds.shape[0] == trues.shape[0]
-    return sum([(p == t).all() for p, t in zip(preds, trues)])
+    #return sum([(p == t).all() for p, t in zip(preds, trues)])
+    return sum([label_to_text(p) == label_to_text(t) for p, t in zip(preds, trues)])
 
 class Train:
 
@@ -27,15 +28,16 @@ class Train:
         self.args = args
 
         transform = transforms.Compose([
-            transforms.RandomRotation(2.8),
-            transforms.RandomAffine(degrees=40, scale=(.9, 1.1), shear=0),
+            #transforms.Resize(72),
+            transforms.RandomAffine(degrees=15, scale=(.9, 1.1), shear=0),
             transforms.RandomPerspective(distortion_scale=0.2),
+            transforms.RandomResizedCrop(64, scale=(0.7, 1.0)),
             transforms.ToTensor(),
-            transforms.RandomErasing(scale=(0.02, 0.16), ratio=(0.3, 1.6)),
+            transforms.RandomErasing(scale=(0.02, 0.04), ratio=(0.3, 1.6)),
             transforms.Normalize((0.5, ), (1.0, ))
         ])
 
-        dataset = HangulDataset(transform=transform)
+        dataset = HangulDataset(transform=transform, image_size=72)
         self.train_num = int(args.train_ratio * len(dataset))
         self.vali_num = len(dataset) - self.train_num
         train_set, vali_set = torch.utils.data.random_split(dataset, [self.train_num, self.vali_num])
@@ -45,9 +47,9 @@ class Train:
                                                        shuffle=False, num_workers=8)
 
         test_transform = transforms.Compose([
-            transforms.Resize((args.image_size-8, args.image_size-8)),
+            transforms.Resize((args.image_size-20, args.image_size-20)),
             transforms.ToTensor(),
-            transforms.Pad(4, fill=1),
+            transforms.Pad(10, fill=1),
             transforms.Lambda(lambda x: 1 - x),
             transforms.Normalize((0.5, ), (1.0, ))
         ])
@@ -99,11 +101,20 @@ class Train:
         score = 0
 
         for xs, ys in tqdm.tqdm(self.test_loader):
-            xs, ys = xs.to(device), ys.to(device)
+            xs = xs.to(device)
             preds = self.model(xs)
 
-            preds = torch.sigmoid(preds).data > 0.5
-            score += accuracy(ys.cpu().numpy(), preds.cpu().numpy())
+            #preds = torch.sigmoid(preds).data > 0.5
+            ys = ys.detach().cpu().numpy()
+            preds = preds.detach().cpu().numpy()
+
+            score += accuracy(ys, preds)
+
+            for y, pred in zip(ys, preds):
+                char_y = label_to_text(y)
+                char_p = label_to_text(pred)
+                if char_y != char_p:
+                    print(f"true: {char_y}, pred:{char_p}")
 
         acc = score / len(self.test_loader.dataset)
         print("Test Accuracy: {:.4f}".format(acc))
