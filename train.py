@@ -1,12 +1,13 @@
 import argparse
 
+import tqdm
 import torch
 from torch import nn
 from torch import optim
 from torch.nn import functional as F
 from torchvision import transforms
 
-from data import HangulDataset, JAMO1, JAMO2, JAMO3, label_to_text
+from data import HangulDataset, TestDataset, JAMO1, JAMO2, JAMO3, label_to_text
 import models
 
 model_names = sorted(name for name in models.__dict__
@@ -43,9 +44,23 @@ class Train:
         self.vali_loader = torch.utils.data.DataLoader(vali_set, args.batch_size,
                                                        shuffle=False, num_workers=8)
 
+        test_transform = transforms.Compose([
+            transforms.Resize((args.image_size-8, args.image_size-8)),
+            transforms.ToTensor(),
+            transforms.Pad(4, fill=1),
+            transforms.Lambda(lambda x: 1 - x),
+            transforms.Normalize((0.5, ), (1.0, ))
+        ])
+        testset = TestDataset(transform=test_transform)
+        self.test_loader = torch.utils.data.DataLoader(testset, args.test_batch_size,
+                                                       shuffle=False, num_workers=8)
+
         self.model = models.__dict__[args.arch](num_classes=JAMO1+JAMO2+JAMO3).to(device)
         self.criterion = nn.BCEWithLogitsLoss()
         self.optimizer = optim.Adam(self.model.parameters(), lr=args.learning_rate)
+
+        if args.pretrained:
+            self.model.load_state_dict(torch.load(args.checkpoint))
 
     def train(self):
         self.model.train()
@@ -81,6 +96,20 @@ class Train:
 
     def test(self):
         self.model.eval()
+        score = 0
+
+        for xs, ys in tqdm.tqdm(self.test_loader):
+            xs, ys = xs.to(device), ys.to(device)
+            preds = self.model(xs)
+
+            preds = torch.sigmoid(preds).data > 0.5
+            score += accuracy(ys.cpu().numpy(), preds.cpu().numpy())
+
+        acc = score / len(self.test_loader.dataset)
+        print("Test Accuracy: {:.4f}".format(acc))
+
+    def inference(self):
+        self.model.eval()
         for xs, ys in self.vali_loader:
             xs = xs.to(device)
             preds = self.model(xs)
@@ -96,11 +125,16 @@ class Train:
             break
 
     def run(self):
+        best_loss = 999
         for epoch in range(self.args.epochs):
             train_loss = self.train()
             vali_loss = self.validate()
             print("epochs: {}, train_loss: {:.4f}, vali_loss: {:.4f}".format(epoch+1, train_loss, vali_loss))
-        self.test()
+            if best_loss > vali_loss:
+                best_loss = vali_loss
+                if self.args.checkpoint is not None:
+                    torch.save(self.model.state_dict(), self.args.checkpoint)
+        self.inference()
 
 def main():
 
@@ -112,16 +146,28 @@ def main():
                         help='model architecture: ' +
                             ' | '.join(model_names) +
                             ' (default: resnet18)')
+    parser.add_argument('--image_size', type=int, default=64)
     # train
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--batch_size', type=int, default=128)
+    parser.add_argument('--test_batch_size', type=int, default=1500)
     parser.add_argument('--train_ratio', type=float, default=0.70)
+    parser.add_argument('--evaluate', action='store_true',
+                        help='evaluate model on testset')
+    parser.add_argument('--pretrained', action='store_true',
+                        help='use pretrained model')
+    parser.add_argument('--checkpoint', type=str,
+                        help='save just model parameter')
+
     #optimizer
     parser.add_argument('--learning_rate', type=float, default=5e-4)
     args = parser.parse_args()
 
     train = Train(args)
-    train.run()
+    if args.evaluate:
+        train.test()
+    else:
+        train.run()
 
 if __name__ == "__main__":
     main()

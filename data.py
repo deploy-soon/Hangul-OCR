@@ -1,3 +1,5 @@
+import os
+import glob
 import random
 from PIL import ImageFont, ImageDraw, Image
 import numpy as np
@@ -18,6 +20,20 @@ def label_to_text(label):
     k = np.argmax(jamo3)
     char = chr(i * 588 + j * 28 + k + JAMO_OFFSET)
     return char
+
+def text_to_label(char):
+    idx = ord(char) - JAMO_OFFSET
+    jamo1 = idx // (JAMO2 * JAMO3)
+    jamo3 = idx % JAMO3
+    jamo2 = ((idx - jamo3) % (JAMO2 * JAMO3)) // 28
+    return jamo1, jamo2, jamo3
+
+def label_to_one_hot(i, j, k):
+    label = np.zeros((JAMO1 + JAMO2 + JAMO3,), np.float32)
+    label[i] = 1
+    label[JAMO1 + j] = 1
+    label[JAMO1 + JAMO2 + k] = 1
+    return label
 
 def text_to_image(char, width, height,
                   font,
@@ -63,12 +79,44 @@ class HangulDataset(Dataset):
                             font=random.choice(self.fonts),
                             color=random.randint(200, 255),
                             stroke_width=random.randint(1, 2))
-        label = np.zeros((JAMO1 + JAMO2 + JAMO3,), np.float32)
-        label[i] = 1
-        label[JAMO1 + j] = 1
-        label[JAMO1 + JAMO2 + k] = 1
+        label = label_to_one_hot(i, j, k)
         if self.transform is not None:
             img = self.transform(img)
         return img, label
+
+
+class TestDataset(Dataset):
+
+    def __init__(self, transform=None):
+        self.transform = transform
+        data_path = "/home/soon/chardata/*/*/*/*.png"
+        file_list = glob.glob(data_path)
+
+        images = []
+        for path in file_list:
+            _path = os.path.normpath(path).split(os.path.sep)
+            if len(_path) > 3 and _path[-3].startswith("Hangul"):
+                char = _path[-2]
+                i, j, k = text_to_label(char)
+                label = label_to_one_hot(i, j, k)
+                images.append((label, path))
+        self.images = images
+        print("load test images:", len(self.images))
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, idx):
+        label, path = self.images[idx]
+        image = Image.open(path)
+        if self.transform is not None:
+            image = self.transform(image)
+        return image, label
+
+
+if __name__ == "__main__":
+    data = TestDataset()
+
+
 
 
