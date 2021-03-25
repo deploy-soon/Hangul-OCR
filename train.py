@@ -7,7 +7,11 @@ from torch.nn import functional as F
 from torchvision import transforms
 
 from data import HangulDataset, JAMO1, JAMO2, JAMO3, label_to_text
-from models import resnet50
+import models
+
+model_names = sorted(name for name in models.__dict__
+    if name.islower() and not name.startswith("__")
+    and callable(models.__dict__[name]))
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -39,7 +43,7 @@ class Train:
         self.vali_loader = torch.utils.data.DataLoader(vali_set, args.batch_size,
                                                        shuffle=False, num_workers=8)
 
-        self.model = resnet50(num_classes=JAMO1+JAMO2+JAMO3).to(device)
+        self.model = models.__dict__[args.arch](num_classes=JAMO1+JAMO2+JAMO3).to(device)
         self.criterion = nn.BCEWithLogitsLoss()
         self.optimizer = optim.Adam(self.model.parameters(), lr=args.learning_rate)
 
@@ -103,13 +107,17 @@ def main():
     parser = argparse.ArgumentParser(description="OCR for Hangul",
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     # model
-
+    parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet18',
+                        choices=model_names,
+                        help='model architecture: ' +
+                            ' | '.join(model_names) +
+                            ' (default: resnet18)')
     # train
-    parser.add_argument('--epochs', type=int, default=85)
+    parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--train_ratio', type=float, default=0.70)
     #optimizer
-    parser.add_argument('--learning_rate', type=float, default=1e-3)
+    parser.add_argument('--learning_rate', type=float, default=5e-4)
     args = parser.parse_args()
 
     train = Train(args)
