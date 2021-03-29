@@ -22,6 +22,9 @@ def accuracy(preds, trues):
     #return sum([(p == t).all() for p, t in zip(preds, trues)])
     return sum([label_to_text(p) == label_to_text(t) for p, t in zip(preds, trues)])
 
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
 class Train:
 
     def __init__(self, args):
@@ -47,9 +50,9 @@ class Train:
                                                        shuffle=False, num_workers=8)
 
         test_transform = transforms.Compose([
-            transforms.Resize((args.image_size-20, args.image_size-20)),
+            transforms.Resize((args.image_size-24, args.image_size-24)),
+            transforms.Pad(12, fill=255),
             transforms.ToTensor(),
-            transforms.Pad(10, fill=1),
             transforms.Lambda(lambda x: 1 - x),
             transforms.Normalize((0.5, ), (1.0, ))
         ])
@@ -58,6 +61,7 @@ class Train:
                                                        shuffle=False, num_workers=8)
 
         self.model = models.__dict__[args.arch](num_classes=JAMO1+JAMO2+JAMO3).to(device)
+        print("model parameters", count_parameters(self.model))
         self.criterion = nn.BCEWithLogitsLoss()
         self.optimizer = optim.Adam(self.model.parameters(), lr=args.learning_rate)
 
@@ -94,12 +98,13 @@ class Train:
 
             vali_loss += loss.item() * xs.size(0)
         print("validate acc:", '%.3f' % (score / self.vali_num))
-        return vali_loss / self.vali_num
+        return vali_loss / self.vali_num, score / self.vali_num
 
     def test(self):
         self.model.eval()
         score = 0
 
+        scores_map = {}
         for xs, ys in tqdm.tqdm(self.test_loader):
             xs = xs.to(device)
             preds = self.model(xs)
@@ -113,8 +118,11 @@ class Train:
             for y, pred in zip(ys, preds):
                 char_y = label_to_text(y)
                 char_p = label_to_text(pred)
+
                 if char_y != char_p:
-                    print(f"true: {char_y}, pred:{char_p}")
+                    scores_map[char_y] = scores_map.setdefault(char_y, 0) + 1
+
+                    #print(f"true: {char_y}, pred:{char_p}")
 
         acc = score / len(self.test_loader.dataset)
         print("Test Accuracy: {:.4f}".format(acc))
@@ -137,15 +145,19 @@ class Train:
 
     def run(self):
         best_loss = 999
+        best_acc = 0
         for epoch in range(self.args.epochs):
             train_loss = self.train()
-            vali_loss = self.validate()
+            vali_loss, vali_acc = self.validate()
             print("epochs: {}, train_loss: {:.4f}, vali_loss: {:.4f}".format(epoch+1, train_loss, vali_loss))
             if best_loss > vali_loss:
                 best_loss = vali_loss
+                best_acc = vali_acc
                 if self.args.checkpoint is not None:
                     torch.save(self.model.state_dict(), self.args.checkpoint)
         self.inference()
+        print("best acc", best_acc)
+
 
 def main():
 
