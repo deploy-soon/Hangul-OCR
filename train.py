@@ -97,7 +97,7 @@ class Train:
             score += accuracy(ys.cpu().numpy(), preds.cpu().numpy())
 
             vali_loss += loss.item() * xs.size(0)
-        print("validate acc:", '%.3f' % (score / self.vali_num))
+        #print("validate acc:", '%.3f' % (score / self.vali_num))
         return vali_loss / self.vali_num, score / self.vali_num
 
     def test(self):
@@ -149,7 +149,7 @@ class Train:
         for epoch in range(self.args.epochs):
             train_loss = self.train()
             vali_loss, vali_acc = self.validate()
-            print("epochs: {}, train_loss: {:.4f}, vali_loss: {:.4f}".format(epoch+1, train_loss, vali_loss))
+            print("epochs: {}, train_loss: {:.4f}, vali_loss: {:.4f}, vali_acc: {:.4f}".format(epoch+1, train_loss, vali_loss, vali_acc))
             if best_loss > vali_loss:
                 best_loss = vali_loss
                 best_acc = vali_acc
@@ -171,9 +171,9 @@ def main():
                             ' (default: resnet18)')
     parser.add_argument('--image_size', type=int, default=64)
     # train
-    parser.add_argument('--epochs', type=int, default=100)
+    parser.add_argument('--epochs', type=int, default=200)
     parser.add_argument('--batch_size', type=int, default=128)
-    parser.add_argument('--test_batch_size', type=int, default=1500)
+    parser.add_argument('--test_batch_size', type=int, default=1000)
     parser.add_argument('--train_ratio', type=float, default=0.70)
     parser.add_argument('--evaluate', action='store_true',
                         help='evaluate model on testset')
@@ -183,7 +183,7 @@ def main():
                         help='save just model parameter')
 
     #optimizer
-    parser.add_argument('--learning_rate', type=float, default=5e-4)
+    parser.add_argument('--learning_rate', type=float, default=2e-4)
     args = parser.parse_args()
 
     train = Train(args)
