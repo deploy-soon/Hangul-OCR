@@ -1,4 +1,5 @@
 import argparse
+import numpy as np
 
 import tqdm
 import torch
@@ -21,6 +22,18 @@ def accuracy(preds, trues):
     assert preds.shape[0] == trues.shape[0]
     #return sum([(p == t).all() for p, t in zip(preds, trues)])
     return sum([label_to_text(p) == label_to_text(t) for p, t in zip(preds, trues)])
+
+def accuracy_all(preds, trues):
+    assert preds.shape[0] == trues.shape[0]
+    scores = [0] * 4
+    for pred, true in zip(preds, trues):
+        jamo1 = np.argmax(pred[:JAMO1])
+        jamo2 = np.argmax(pred[JAMO1:JAMO1+JAMO2])
+        jamo3 = np.argmax(pred[JAMO1+JAMO2:])
+        score = int(true[jamo1] + true[JAMO1+jamo2] + true[JAMO1+JAMO2+jamo3])
+        scores[score] += 1
+    return scores
+
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -60,7 +73,7 @@ class Train:
         self.test_loader = torch.utils.data.DataLoader(testset, args.test_batch_size,
                                                        shuffle=False, num_workers=8)
 
-        self.model = models.__dict__[args.arch](num_classes=JAMO1+JAMO2+JAMO3).to(device)
+        self.model = models.__dict__[args.arch](num_classes=JAMO1+JAMO2+JAMO3, **vars(args)).to(device)
         print("model parameters", count_parameters(self.model))
         self.criterion = nn.BCEWithLogitsLoss()
         self.optimizer = optim.Adam(self.model.parameters(), lr=args.learning_rate)
@@ -94,7 +107,7 @@ class Train:
             loss = self.criterion(preds, ys.float())
 
             preds = torch.sigmoid(preds).data > 0.5
-            score += accuracy(ys.cpu().numpy(), preds.cpu().numpy())
+            score += accuracy(preds.cpu().numpy(), ys.cpu().numpy())
 
             vali_loss += loss.item() * xs.size(0)
         #print("validate acc:", '%.3f' % (score / self.vali_num))
@@ -103,6 +116,7 @@ class Train:
     def test(self):
         self.model.eval()
         score = 0
+        score_all = [0] * 4
 
         scores_map = {}
         for xs, ys in tqdm.tqdm(self.test_loader):
@@ -113,7 +127,9 @@ class Train:
             ys = ys.detach().cpu().numpy()
             preds = preds.detach().cpu().numpy()
 
-            score += accuracy(ys, preds)
+            score += accuracy(preds, ys)
+            for i, val in enumerate(accuracy_all(preds, ys)):
+                score_all[i] += val
 
             for y, pred in zip(ys, preds):
                 char_y = label_to_text(y)
@@ -126,6 +142,10 @@ class Train:
 
         acc = score / len(self.test_loader.dataset)
         print("Test Accuracy: {:.4f}".format(acc))
+        print("Zero Acc: {:.4f} One Acc: {:.4f} Two Acc: {:.4f} Thr Acc: {:.4f}".format(
+            score_all[0] / sum(score_all), score_all[1] / sum(score_all),
+            score_all[2] / sum(score_all), score_all[3] / sum(score_all),
+        ))
 
     def inference(self):
         self.model.eval()
@@ -170,8 +190,12 @@ def main():
                             ' | '.join(model_names) +
                             ' (default: resnet18)')
     parser.add_argument('--image_size', type=int, default=64)
+
+    #  vit
+    parser.add_argument('--depth', type=int, default=8)
+
     # train
-    parser.add_argument('--epochs', type=int, default=200)
+    parser.add_argument('--epochs', type=int, default=300)
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--test_batch_size', type=int, default=1000)
     parser.add_argument('--train_ratio', type=float, default=0.70)

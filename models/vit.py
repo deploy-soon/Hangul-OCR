@@ -96,7 +96,7 @@ class Transformer(nn.Module):
 
 class vit(nn.Module):
     def __init__(self, *, num_classes, image_size=64, patch_size=8, dim=256, depth=8, heads=8, mlp_dim=1024,
-                 pool='cls', channels=1, dim_head=32, dropout=0.1, emb_dropout=0.):
+                 pool='cls', channels=1, dim_head=32, dropout=0.1, emb_dropout=0., **kwargs):
         super().__init__()
         assert image_size % patch_size == 0, 'Image dimensions must be divisible by the patch size.'
         num_patches = (image_size // patch_size) ** 2
