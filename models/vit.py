@@ -10,7 +10,7 @@ https://github.com/lucidrains/vit-pytorch
 }
 """
 
-
+import math
 import torch
 from torch import nn, einsum
 import torch.nn.functional as F
@@ -19,7 +19,7 @@ from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 
 
-__all__ = ['vit', 't2t']
+__all__ = ['vit', 't2tvit']
 
 class Residual(nn.Module):
     def __init__(self, fn):
@@ -152,8 +152,9 @@ class RearrangeImage(nn.Module):
 
 # main class
 
-class t2t(nn.Module):
-    def __init__(self, *, image_size, num_classes, dim, depth = None, heads = None, mlp_dim = None, pool = 'cls', channels = 3, dim_head = 64, dropout = 0., emb_dropout = 0., transformer = None, t2t_layers = ((7, 4), (3, 2), (3, 2))):
+class t2tvit(nn.Module):
+    def __init__(self, *, image_size, num_classes, dim=256, depth=5, heads=8, mlp_dim=1024, pool='cls',
+            channels=1, dim_head=32, dropout=0.1, emb_dropout = 0., transformer = None, t2t_layers = ((7, 4), (3, 2)), **kwargs):
         super().__init__()
         assert pool in {'cls', 'mean'}, 'pool type must be either cls (cls token) or mean (mean pooling)'
 
